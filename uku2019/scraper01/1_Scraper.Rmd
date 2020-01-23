@@ -1,0 +1,159 @@
+---
+title: "1, scraper"
+output: html_document
+---
+# Підготовка до роботи
+Сам R має вбудовані функції: зробити таблицю з даними `data.frame`, виконати арифметичні операції, підрахувати базові статистики, фільтрувати…  Проте багато завдань потребують додаткових функцій. Їх і дають бібліотеки. Ми встанивимо:  
+- rvest для роботи з html  
+- tidyverse — набір пакетів для роботи з даними від Хедлі Вікхема. Tidy має набагато приємніший інтерфейс, ніж базовий R, а також купу допоміжних функцій  
+
+## Markdown
+Робочі ноутбуки мають розширення ".Rmd" — це маркдаун в R. Він дозволяє комбінувати текст, код, результат виконання коду в одному файлі. Ноутбуки можна перетворити в інші формати, наприклад, у веб-сторінку або pdf. Більше тут: https://rmarkdown.rstudio.com/lesson-2.html,  https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+install.packages('rvest')    # install 'rvest' library in R; library and package are synonyms
+install.packages('tidyverse')
+```
+
+У робочому середовищі або скрипті треба імпортувати необхідні бібліотеки:
+```{r setup, include=FALSE}
+library(rvest)    # a library for web web scraping
+library(tidyverse)
+```
+
+# Скрейпинг
+## Cheatsheets
+
+About HTML: https://www.w3schools.com/html/default.asp
+CSS-selectors: https://www.w3schools.com/cssref/css_selectors.asp
+
+### Tidyverse code: piping
+
+`data %>% function1() %>% function2()` - is a **pipe**  
+`data` — is our data structure, most often a *DataFrame*  
+`function1`, `function1` — are functions, applied to data. The order of them matters!  
+
+1. `data %>% function1()` - `data` is transformed by `function1`.  
+2. `data %>% function1() %>% function2()` — data, transformed by `function1`, e.g. the result of `function1`, goes to `function2`.  
+
+The same can be written as:
+`data_after_f1 <- function1(data)`  
+`data_after_f2 <- function1(data_after_f1)` — much less elegant and clear code, but does the same.  
+
+**You can stack as much functions in pipe as you want!**  
+
+## Let's code!
+Заскрейпимо сайт euvsdisinfo.eu, щоб проаналізувати, яка там дезінформація
+
+0. Отримаємо html
+```{r}
+url <- "https://euvsdisinfo.eu/disinformation-cases/"
+content <- read_html(url)
+content
+```
+
+1. Знайдемо потрібні елементи на сторінці
+![find element](1_find-element.png)
+
+```{r}
+header <- content %>%
+  html_node('div.disinfo-db-columns') %>%
+  html_children() %>%
+  html_text() %>%
+  gsub("^\\s+|\\s+$", "", .)
+
+header
+
+rows <- content %>%
+  html_nodes('div.disinfo-db-post')
+
+rows[[1]] %>%
+  html_nodes('div') %>%
+  html_text()
+```
+### Які проблеми у нас з'явились?
+1. Треба розібрати — парсити — кожен `<div>`-рядок окремо. Ми *не*хочемо робити це вручну кулька тисяч разів!
+
+2. Результати представлені в сторінках. Отже треба заходити на кожну сторінку окремо і парсити її. Сторінки однакові
+
+Рішення — **цикл**
+Приклад циклу:
+```{r}
+iterable <- c(1:15)
+iterable
+
+result <- c()
+
+for (item in iterable) {   # назва "item" довільна
+  result <- c(result, item ^ 3)
+}
+```
+### Цикл для рядків у html
+```{r}
+parsed_rows <- c()
+
+for (row in rows) {
+  parsed_row <- row %>%
+    html_nodes('div[data-column]') %>%
+    html_text() %>%
+    str_trim()
+  
+  names(parsed_row) <- header
+  parsed_rows <- c(parsed_rows, list(parsed_row))
+}
+
+names(parsed_rows) <- 1:length(parsed_rows)
+
+parsed_rows <- data.frame(parsed_rows) %>%
+  t %>%
+  as.data.frame
+
+parsed_rows
+```
+
+### Цикл для сторінок
+Дуже часто номер сторінки просто пишуть в url. У нашому випадку там записаний офсет — скільки рядків відступити. На сторінці видно, що найбільший офсет складає 7300, а на 1 сторінці 10 записів.  
+Тобто нам треба пройти циклом по офсетам: 0, 10, 20, 30, …, 7290, 7300.
+```{r}
+offsets <- seq(0, 7300, by=10)    # Послідовність з кроком 10
+
+parsed_rows <- c()    # Тут будемо зберігати оброблені рядки
+
+for (o in offsets) {
+  url <- sprintf(
+    "https://euvsdisinfo.eu/disinformation-cases/?offset=%s",
+    o
+  )    # Вставляємо офсет в url
+  rows <- read_html(url) %>%
+    html_nodes('div.disinfo-db-post')    # Копі-паст коду для 1 сторінки
+  
+  # А це копіпаст циклу для обробки рядків
+  for (row in rows) {
+    parsed_row <- row %>%
+      html_nodes('div[data-column]') %>%
+      html_text() %>%
+      str_trim()
+    
+    names(parsed_row) <- header
+    parsed_rows <- c(parsed_rows, list(parsed_row))
+  }
+  
+  print(length(parsed_rows))    # Щоб знати, скільки лишилось скрейпити
+  Sys.sleep(1)    # відсилати запит кожні 2 секунди, а не безперервно
+}
+
+names(parsed_rows) <- 1:length(parsed_rows)
+
+parsed_rows <- data.frame(parsed_rows) %>%
+  t %>%
+  as.data.frame
+
+parsed_rows
+```
+
+## Збереження даних
+```{r}
+write.csv(parsed_rows, 'euvsdisinfo.csv')
+```
+
+
