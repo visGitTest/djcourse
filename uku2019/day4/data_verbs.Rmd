@@ -1,5 +1,5 @@
 ---
-title: "Verbd to work with data"
+title: "Verbs to work with data"
 output: html_document
 ---
 
@@ -13,18 +13,25 @@ output: html_document
 5. group_by() + summarize() --- аналог pivot table в Excel
 6. join - об'єднання таблиць
 
-
 ```{r}
 library(dplyr) # main library to work with data, provides all verbs 
 library(readr) # to import data from different formats (csv, excel, etc)
 
-df <- read_csv("data/declarations.csv")  # мій файл з даними називається "declarations.csv"
+# опис даних у файлі ../../data/deathset/README.txt
+df <- read.csv("../../data/deathset/csv/deathcauses.csv",
+               sep = "\t",
+               colClasses = c("factor", "factor", "factor", "factor", "factor", "factor", "factor", "character"))
 
+df$count <- as.numeric(df$count)
+# https://socialdata.org.ua/death/
+
+head(df)
 ```
 
+## Verbs: select()
+Вибрати лише потрібні колонки
 
-### Verbs: select()
-Нагадую, оператор "%>%" (конвеєр, або труба) означає взяти ліву сторону виразу і передати її вправо, як перший аргумент для функції, що стоїть одразу після нього праворуч. Цей оператор дозволяє впорядкованим чином, крок за кроком, робити перетворення даних які нам потрібні 
+Нагадую, оператор "%>%" (конвеєр, або труба, pipe) означає взяти ліву сторону виразу і передати її вправо, як перший аргумент для функції, що стоїть одразу після нього праворуч. Цей оператор дозволяє впорядкованим чином, крок за кроком, робити перетворення даних які нам потрібні 
 
 
 
@@ -33,105 +40,141 @@ df <- read_csv("data/declarations.csv")  # мій файл з даними на�
 library(dplyr)
 
 # у цьому випадку, ми передаємо нашу табличку з даними df, як перший аргумент для функції select()
-df1 <- df %>% select(full_name, name, off, income, income_family)
+df1 <- df %>% select(reg_code, sex, age_code, class_code, count)
 
 # цей варіант краще читається - кожна дієслово по роботі з даними має бути в новій строці
 df1 <- df %>% 
-  select(full_name, name, off, income, income_family)
+  select(reg_code, sex, age_code, class_code, count)
+
+head(df1)
 
 ```
 
 
-### Verbs: arrange()  (Sort in Excel)  
+## Verbs: arrange()  (Сортування)  
 
 ```{r}
 df1 %>%
-  arrange(income) # sort by "income" column, ascending
+  arrange(count) # sort by "income" column, ascending
 
 # для того, щоб сортувати в спадаючому порядку, використовуйте знак "-" або функцію desc()
 df1 %>%
-  arrange(-income) # sort by "income" column, descending
+  arrange(-count) # sort by "income" column, descending
 
 df1 %>%
-  arrange(desc(income) ) # sort by "income" column, descending
+  arrange(desc(count) ) # sort by "income" column, descending
 
 ```
 
   
-### Verbs: filter()
+## Verbs: filter()
 Функція filter() вибирає лише ті рядки з таблиці, які відповідають нашим умовам.
 
 ```{r}
 df2 <- df1 %>%
-  filter(off == "парламент") # вибрати всі записи(рядки), де в колонці off вказано "парламент"
+  filter(class_code == "9") # вибрати всі записи(рядки), де в колонці class_code вказано "5"
 
 df2 <- df1 %>%
-  filter(off == "парламент", income > 4000000) # вибрати всі записи(рядки), де в колонці off вказано "парламент" ТА задекларований дохід > 4000000. Зверніть увагу, що "==" розшивфровується як "дорівнює"
+  filter(class_code == "9", count > 1000) # вибрати всі записи(рядки), де в колонці class_code вказано "5" ТА кількість > 1000 Зверніть увагу, що "==" розшивфровується як "дорівнює"
+
+df2
 
 ```
 
 
-# Verbs: mutate()
-Створюємо нову колонку, підраховуємо нові значення  для неї за будь якою формулою(функцією)
+## Verbs: mutate()
+На ходу створює нову колонку. Нові значення для неї підрахуємо за будь якою формулою(функцією)
 
 ```{r}
 
 df3 <- df1 %>%
-  mutate(person_family_ratio = income / income_family) # створюємо нову колонку з назвою person_family_ratio, і значеннями що дорівнюють співвідношенню доходу і доходу родини
-
-df4 <- df %>%
-  mutate(income_usd = income/28,  total_cars = cars + cars_family) #  створюємо дві нові колонки, income_usd та total_cars
+  mutate(count_1000 = count / 1000) # створюємо нову колонку з назвою count_1000, і значеннями що дорівнює кількості смертей від певних причин у тисячах
 
 ```
 
 
-
-
-
-### Mutate
-Щоб створити нову колонку в таблиці з даними, на основі тих, що вже існують 
-
-```{r}
-df_new <- df %>% 
-  mutate(income_usd = income / 29, total_income = income + income_family)
-
-df_new
-```
-
-
-### Зв'язка Group_by + Summarize (аналог Pivot table)
+## Зв'язка Group_by + Summarize (аналог Pivot table)
 
 ```{r}
 
-df_new1 <- df %>%
-  group_by(office) %>%
-  summarise(number_of_ppl = n(), mean_income = mean(income), sd_income=sd(income) )
- 
+df_grouped <- df %>%
+  group_by(class_code)
 
-df_new1 <- df %>%
-  group_by(name) %>%
-  summarise(count=n(), maximum = max(income) ) 
- 
-df_new1 <- df %>%
-  group_by(office, name) %>%
-  summarise(count=n(), maximum = mean(income) ) 
-
-
+head(df_grouped)
 ```
 
-### Join - об'єднання таблиць за допомогою значень в колонках
+Нічого ніби й не змінилось. Бо `group_by` працює з `summarise`
+```{r}
+df_grouped <- df %>%
+  group_by(class_code) %>%
+  summarise(n_deaths = sum(count), sd_in_class = sd(count))
+
+head(df_grouped)
+```
+Ми порахували сумарну кількість смертей за групами причин смертності, плюс стандартне відхилення (воно тут не дуже статистично коректне, використано для прикладу).
+
+## З'єднання таблиць
+Більше про типи: https://dplyr.tidyverse.org/reference/join.html#join-types
 
 ```{r}
-install.packages("nycflights13")
-library(nycflights13)
-View(flights)
+regions <- read.csv("../../data/deathset/csv/regions.csv", sep = "\t", colClasses = c("factor", "factor"))
 
-View(airlines)  
+df_joined <- df %>%
+  left_join(regions, by = "reg_code")
 
+df_joined
 ```
 
+З'явилась назва області. Колонка "reg_code" була і у таблиці df, і у таблиці regions — довіднику, що містить назви кодів областей.
+
+Аналогічно можемо додати цікаві нам дані
 ```{r}
-df_flights <- flights %>%
-  inner_join(airlines, by = 'carrier' )
+ages <- read.csv("../../data/deathset/csv/age.csv", sep = "\t", colClasses = c("factor", "factor"))
+classes <- read.csv("../../data/deathset/csv/class.csv", sep = "\t", colClasses = c("factor", "NULL", "factor"))
+koatuu <- read.csv("../../data/deathset/csv/koatuu.csv", sep = "\t", colClasses = c("factor", "factor"))
+population <- read.csv("../../data/deathset/csv/population.csv", sep = "\t", colClasses = c("factor", "factor", "numeric"))
+
+
+df_joined <- df_joined %>%
+  left_join(ages) %>%
+  left_join(classes) %>%
+  left_join(koatuu) %>%
+  left_join(population, by = c("np_name" = "name"))
+
+
 ```
+
+Повторення, все разом
+```{r}
+top_alco_death <- df_joined %>%
+  select(np_name, pop, count, age_name, disease_name, sex, reg_name) %>%    # лише потрібні колонки
+  group_by(np_name, pop, disease_name, reg_name) %>%    # згрупуємо так, щоб не мати вікових груп
+  summarise(count = sum(count)) %>%    # неодмінно summarise, число смертей у кожній з вікових груп сумується
+  mutate(per100k = count / pop * 100000) %>%    # додамо нову колонку — кількість смертей на 100 тис. населення
+  filter(grepl("[Аа]лкогол", disease_name, perl = TRUE) & pop > 1) %>%    # відфільтруємо смерті, пов'язані з алкоголем.
+  # Іх багато, тому умова фільтру — слово "алко" у назві причини
+  group_by(np_name, reg_name) %>%    # знову згрупуємо, цього разу за населеним пунктом / районом
+  summarize(per100k = sum(per100k), count = sum(count), pop = pop[1]) %>%    # summarise count, як і в попередньому.
+  # pop — чисельність населення — є лише для територіальної одиниці, тож ми беремо перше значення з групи
+  arrange(-per100k)    # сортування
+
+least_alco_death <- top_alco_death %>% arrange(per100k)  
+
+print("The most alco-deadly:")
+top_alco_death[1:25, c("np_name", "reg_name")]
+print("The least alco-deadly:")
+least_alco_death[1:25, c("np_name", "reg_name")]
+
+mean_ukr <- sum(top_alco_death$count) / sum(top_alco_death$pop) * 100000
+```
+
+## Оцінимо розподіл
+```{r}
+library(ggplot2)
+top_alco_death %>% 
+  ggplot(aes(per100k)) + geom_histogram(binwidth = 5, fill = "darkblue") + 
+  geom_vline(xintercept = mean_ukr, color = "red")
+```
+
+
 

@@ -13,12 +13,14 @@ output: html_document
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 install.packages('rvest')    # install 'rvest' library in R; library and package are synonyms
 install.packages('tidyverse')
+install.packages("progress")
 ```
 
 У робочому середовищі або скрипті треба імпортувати необхідні бібліотеки:
 ```{r setup, include=FALSE}
 library(rvest)    # a library for web web scraping
 library(tidyverse)
+library(progress)
 ```
 
 # Скрейпинг
@@ -67,16 +69,16 @@ header
 rows <- content %>%
   html_nodes('div.disinfo-db-post')
 
-rows[[1]] %>%
+rows %>%
   html_nodes('div') %>%
-  html_text()
+  html_text() %>%
+  gsub("^\\s+|\\s+$", "", .)
 ```
 ### Які проблеми у нас з'явились?
-1. Треба розібрати — парсити — кожен `<div>`-рядок окремо. Ми *не*хочемо робити це вручну кулька тисяч разів!
+1. Результати представлені в сторінках. Отже треба заходити на кожну сторінку окремо і парсити її. Сторінки однакові
+Ми *не*хочемо робити це вручну кілька сот разів!
 
-2. Результати представлені в сторінках. Отже треба заходити на кожну сторінку окремо і парсити її. Сторінки однакові
-
-Рішення — **цикл**
+Рішення — *цикл*
 Приклад циклу:
 ```{r}
 iterable <- c(1:15)
@@ -87,73 +89,71 @@ result <- c()
 for (item in iterable) {   # назва "item" довільна
   result <- c(result, item ^ 3)
 }
+
+result
 ```
-### Цикл для рядків у html
-```{r}
-parsed_rows <- c()
-
-for (row in rows) {
-  parsed_row <- row %>%
-    html_nodes('div[data-column]') %>%
-    html_text() %>%
-    str_trim()
-  
-  names(parsed_row) <- header
-  parsed_rows <- c(parsed_rows, list(parsed_row))
-}
-
-names(parsed_rows) <- 1:length(parsed_rows)
-
-parsed_rows <- data.frame(parsed_rows) %>%
-  t %>%
-  as.data.frame
-
-parsed_rows
-```
-
 ### Цикл для сторінок
 Дуже часто номер сторінки просто пишуть в url. У нашому випадку там записаний офсет — скільки рядків відступити. На сторінці видно, що найбільший офсет складає 7300, а на 1 сторінці 10 записів.  
 Тобто нам треба пройти циклом по офсетам: 0, 10, 20, 30, …, 7290, 7300.
 ```{r}
-offsets <- seq(0, 7300, by=10)    # Послідовність з кроком 10
+offsets <- seq(0, 7370, by=10)    # Послідовність з кроком 10
 
-parsed_rows <- c()    # Тут будемо зберігати оброблені рядки
+date <- c()    # Тут будемо зберігати оброблені дані
+title <- c()
+outlets <- c()
+country <- c()
+link <- c()
+
+pb <- progress_bar$new(total = length(offsets))    # щоб бачити, як просувається скрейпінг
 
 for (o in offsets) {
-  url <- sprintf(
-    "https://euvsdisinfo.eu/disinformation-cases/?offset=%s",
-    o
-  )    # Вставляємо офсет в url
+  url <- sprintf("https://euvsdisinfo.eu/disinformation-cases/?offset=%s", o)    # Вставляємо офсет в url
   rows <- read_html(url) %>%
     html_nodes('div.disinfo-db-post')    # Копі-паст коду для 1 сторінки
   
-  # А це копіпаст циклу для обробки рядків
-  for (row in rows) {
-    parsed_row <- row %>%
-      html_nodes('div[data-column]') %>%
-      html_text() %>%
-      str_trim()
-    
-    names(parsed_row) <- header
-    parsed_rows <- c(parsed_rows, list(parsed_row))
-  }
+  # візьмемо всі клітинки, щоб не повторювати цей код 4 рази
+  cells <- rows %>%
+    html_nodes("div.disinfo-db-cell[data-column]") %>%
+    html_text() %>%
+    gsub("^\\s+|\\s+$", "", .)    # це видаляє зайві пробіли
   
-  print(length(parsed_rows))    # Щоб знати, скільки лишилось скрейпити
-  Sys.sleep(1)    # відсилати запит кожні 2 секунди, а не безперервно
+  # додамо результати: дати до дат, назви до назв і т.д.
+  # seq(1, 40, 4) дасть вектор c(1, 5, 9, 13 …). Поставивши його в квадратні дужки, отримаємо перше, п'яте, дев'яте і т.д. значення у векторі.
+  date    <- c(date,    cells[seq(1, length(cells), 4)])
+  title   <- c(title,   cells[seq(2, length(cells), 4)])
+  outlets <- c(outlets, cells[seq(3, length(cells), 4)])
+  country <- c(country, cells[seq(4, length(cells), 4)])
+  
+  # лінки окремо, адже там інший css-селектор
+  links_in_loop <- rows %>%
+    html_nodes(".cell-title a") %>%
+    html_attr("href")
+  
+  link <- c(link, links_in_loop)
+  
+  pb$tick()
+  
+  Sys.sleep(2)    # відсилати запит кожні 2 секунди, а не безперервно. Щоб не нашкодити сайту
 }
-
-names(parsed_rows) <- 1:length(parsed_rows)
-
-parsed_rows <- data.frame(parsed_rows) %>%
-  t %>%
-  as.data.frame
-
-parsed_rows
 ```
+
+
+
+### Таблиця з результатами
+```{r}
+df <- data.frame(date = date,
+                 title = title,
+                 outlets = outlets,
+                 country = country,
+                 link = link)
+
+df
+```
+
 
 ## Збереження даних
 ```{r}
-write.csv(parsed_rows, 'euvsdisinfo.csv')
+write.csv(df, 'eu_vs_disinfo.csv')
 ```
 
 
