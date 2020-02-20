@@ -1,0 +1,99 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(lubridate)
+
+urls <- c(
+  "https://raw.githubusercontent.com/rssh/dou_pl_questionare/master/2010_12/questionnaire1_origin.csv",
+  "https://raw.githubusercontent.com/rssh/dou_pl_questionare/master/2011_07/questionnaire2.csv",
+  "https://raw.githubusercontent.com/rssh/dou_pl_questionare/master/2012_05/questionnaire3_cleaned.csv",
+  "https://raw.githubusercontent.com/rssh/dou_pl_questionare/master/2013_01/questionnaire4_cleaned.csv",
+  "https://raw.githubusercontent.com/rssh/dou_pl_questionare/master/2014_01/questionnaire5_cleaned.csv",
+  "https://raw.githubusercontent.com/rssh/dou_pl_questionare/master/2015_01/questionnaire6_cleaned.csv",
+  "https://raw.githubusercontent.com/rssh/dou_pl_questionare/master/2016_01/questionnaire7_cleaned.csv",
+  "https://raw.githubusercontent.com/rssh/dou_pl_questionare/master/2017_01/questionnaire8.csv",
+  "https://raw.githubusercontent.com/rssh/dou_pl_questionare/master/2018_01/q9.csv",
+  "https://raw.githubusercontent.com/rssh/dou_pl_questionare/master/2019_01/q10.csv",
+  "https://raw.githubusercontent.com/rssh/dou_pl_questionare/master/2020_01/q11.csv"
+)
+```
+
+```{r}
+df <- NULL
+for (l in urls) {
+  t <- read.csv(url(l)) %>%
+    select(Timestamp, FirstLanguage)
+  if (is.null(df)) {
+    df <- t
+  } else {
+    df <- rbind(df, t)
+  }
+}
+
+df$Timestamp <- as.POSIXct(df$Timestamp, format = "%m/%d/%Y %H:%M:%S")
+
+df_agg <- df %>%
+  group_by(year(Timestamp), FirstLanguage) %>%
+  summarise(n())
+
+colnames(df_agg) <- c("year", "lang", "n")
+
+df_agg
+
+# write.csv(df_agg, "languages_dou.csv", row.names = FALSE)
+```
+```{r}
+# it is terrible. OpenRefine does it in a minute!
+
+df_agg <- read.csv("languages_dou.csv")
+
+# Code from https://www.r-bloggers.com/fuzzy-string-matching-a-survival-skill-to-tackle-unstructured-information/
+langs <- df_agg$lang %>% tolower() %>% unique()
+
+dist <- adist(langs) %>% data.frame()
+rownames(dist) <- 1:nrow(dist)
+
+m1 <- c()
+m2 <- c()
+
+for (i in 1:nrow(dist)) {
+  m <- which(dist[i,] < 5)
+  if (length(m) == 1) {
+    next()
+  }
+  m <- m[m != i]
+  for (j in m) {
+    m1 <- c(m1, langs[i])
+    m2 <- c(m2, langs[j])
+  }
+}
+
+
+df_isdupl <- data.frame(l1 = m1, l2 = m2) %>% drop_na()
+
+df_isdupl
+
+write.csv(df_isdupl, "possible_lang_duplicates.csv", row.names = FALSE)
+
+
+langs[1]
+
+matches <- sapply(langs, function(lang) {
+  m <- pmatch(lang, langs[langs != lang])
+  if (!is.na(m)) {
+    return(langs[langs != lang][m])
+  } else {
+    return(NA)
+  }
+})
+
+df_isdupl <- data.frame(l1 = langs, l2 = matches) %>% drop_na()
+
+write.csv(df_isdupl, "possible_lang_duplicates.csv", row.names = FALSE)
+
+```
+
