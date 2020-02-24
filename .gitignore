@@ -1,4 +1,5 @@
 *.dbf
+.~lock*
 .Rproj.user
 *.Rproj
 *.csv
