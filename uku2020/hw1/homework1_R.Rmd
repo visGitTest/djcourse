@@ -75,7 +75,7 @@ library(tidyverse)    # встановіть пакет, якщо бачите �
 url <- "https://disp.ua.energy/datagov/dg_year.csv"
 df <- read.csv(url(url))    # to read data from web 
 
-df$Дата <- as.POSIXct(df$Дата, format = "%d.%m.%Y %H:%M:%S")    # date column as date, not as character
+df$Дата <- as.POSIXct(df$Дата, format = "%d.%m.%Y %H:%M:%S", fileEncoding="UTF-8")    # date column as date, not as character
 head(df)
 ```
 Це дані генерації електроенергії з порталу відкритих даних data.gov.ua (там багато цікавого).
