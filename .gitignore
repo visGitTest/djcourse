@@ -1,0 +1,7 @@
+*.dbf
+.~lock*
+.Rproj.user
+*.Rproj
+*.csv
+*.html
+.Rhistory
