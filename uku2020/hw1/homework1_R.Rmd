@@ -8,8 +8,6 @@ str_vec <- c("1.19", "6.24", "1.68", "3.56", "7.16", "7.43", "4.44", "0.4", "4.4
 
 # помилка, тому що строки не розуміють оператора "+":
 str_vec[1] + str_vec[2]
-
-str_vec[6]
 ```
 
 ## Завдання 1. Перетворити кожен елемент `str_vec` в число, "double", за допомогою цикла `for`. В результаті має вийти вектор не з рядками, а з числами: `c(1.19, 6.24, 1.68 …)`
@@ -20,7 +18,7 @@ str_vec[6]
 4. У тілі циклу додати перетворений число до нового вектора з перетвореними числами `double_vec`. Як це зробити — пошукайте англійською, накшталт «R how to append item to vector», https://stackoverflow.com — ваш кращий друг у світі програмування
 
 ```{r}
-# do it here
+# Done hw
 double_vec <- c()
 for (x in str_vec) {
   double_vec <- c(double_vec, as.numeric(x))
@@ -63,13 +61,17 @@ new_vec   # перевіримо, чи вийшло
 ## Завдання 2. З векторизацією простіше: перетворіть `str_vec` на числовий вектор в 1 рядок коду
 Застосуйте перетворюючу фенкцію `as.…` до всього вектора
 ```{r}
-
+double_vec <- as.double(str_vec)
+double_vec
 ```
 
 ## Завдання 3. Перевірте, що тепер з елементами перетвореного вектора можна здійснювати арифметичні операції
 Знайдіть суму, середнє, медіану, стандартне відхилення (standart deviation) вектора
 ```{r}
-
+sum(double_vec)
+mean(double_vec)
+median(double_vec)
+sd(double_vec)
 ```
 
 ### Завдання 4
@@ -78,17 +80,27 @@ new_vec   # перевіримо, чи вийшло
 library(tidyverse)    # встановіть пакет, якщо бачите помилку, що його нема: install.packages("tidyverse")
 
 url <- "https://disp.ua.energy/datagov/dg_year.csv"
-df <- read.csv(url(url), fileEncoding="UTF-8")    # to read data from web 
+df <- read.csv(url(url), encoding = "UTF-8")    # to read data from web 
 
-df$Дата <- as.POSIXct(df$Дата, format = "%d.%m.%Y %H:%M:%S")    # date column as date, not as character
+# У віндоус можна перетворити юнікод на літери, але неможливо викристовувати кириличні назви колонок. Тому просто перейменую всі колонки латиницею
+colnames(df) <- c("date", "aes", "tec",
+                  "renewable", "tes", "ges",
+                  "gaes_gen", "consumption", "gaes_pump",
+                  "be_ru", "eu", "mold",
+                  "burshtynskyi_island")
+
+df$date <- as.POSIXct(df$date, format = "%d.%m.%Y %H:%M:%S")    # date column as date, not as character
 head(df)
 ```
 Це дані генерації електроенергії з порталу відкритих даних data.gov.ua (там багато цікавого).
 
-### 1. Знайдіть середнє, медіану, стандартне відхилення (standart deviation) споживання за годину (колонка "Споживання")
+### 1. Знайдіть середнє, медіану, стандартне відхилення (standart deviation) споживання за годину (колонка "consumption")
 ```{r}
-install.packages("tidyverse")
+mean(df$consumption)
+median(df$consumption)
+sd(df$consumption)
 
+# Цифри можуть відрізнятись, бо дані за посиланням постійно оновлюються
 
 ```
 
