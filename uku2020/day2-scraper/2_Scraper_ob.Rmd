@@ -1,0 +1,131 @@
+---
+title: "Scrape news"
+output: html_notebook
+---
+
+Спробуємо завантажити заголовки, посилання на новини та кількість переглядів з одного великого новинного сайту.
+`rvest` — бібліотека для роботи з html, аби витягати окремі елементи, розбирати структуру html-дерева
+`tidyverse` — набір пакетів для роботи з даними зі зручнішим і зрозумілішим синтаксисом, ніж у "сирому" R.  
+
+### Особливості Tidyverse: piping
+
+`data %>% function1() %>% function2()` - цей способ запису називають **pipe**  
+`data` — це наші дані, найчастіше *DataFrame*  
+`function1`, `function1` — функції, які ми хочемо застосувати до даних у певному порядку  
+
+1. `data %>% function1()` - `data` перетворена за допомогою `function1`.  
+2. `data %>% function1() %>% function2()` — дані після перетворення `function1`відразу йдуть до `function2`.  
+
+Так само можна записати без "пайпів":
+`data_after_f1 <- function1(data)` перше перетворення
+`data_after_f2 <- function2(data_after_f1)` — і друге. Так довше писати.  
+```{r}
+library(rvest)
+library(tidyverse)
+```
+
+Спочатку скачаємо веб-сторінку
+```{r}
+url <- "https://www.obozrevatel.com/main-item.htm"
+
+content <- read_html(url)
+```
+
+Починаємо вибирати елементи за [css-селекторами](https://www.w3schools.com/cssref/css_selectors.asp)
+```{r}
+articles <- content %>%
+  html_nodes("div.section-news-title-img-text article.news-title-img-text")
+articles
+```
+
+Вибрали всі блоки з новинами. У кожному блоці є заголовок, посилання на текст, кількість переглядів.  
+Виберемо текст заголовків:
+```{r}
+titles <- articles %>%
+  html_nodes("a.news-title-img-text__title") %>%
+  html_text()
+
+titles[1:10]
+```
+
+Бачимо, що у всіх заголовків на початку і в кінці рядка є зайві пробіли. Видалимо їх за допомогою [регулярних виразів](https://stringr.tidyverse.org/articles/regular-expressions.html)
+```{r}
+titles <- titles %>%
+  str_replace_all("^\\s+|\\s+$", "")
+```
+
+Тепер з тегів "а" з посиланням на текст новини візьмемо саме посилання, атрибут "href"
+```{r}
+links <- articles %>%
+  html_nodes("a.news-title-img-text__title") %>%
+  html_attr("href")
+```
+
+Витягнемо так само кількість переглядів
+```{r}
+views <- articles %>%
+  html_nodes("span.icon-views") %>%
+  html_text()
+
+length(views)
+
+views
+```
+
+Бачимо, що цифри записано з "т", так просто їх не перетворити на число, як у д/з.
+```{r}
+views <- ifelse(str_ends(views, "т"),   # умова: рядок закінчується на "т"
+                as.double(str_replace(views, "т", "")) * 1000,   # якщо TRUE, робимо це
+                as.double(views)    # а якщо не закінчується на "т", то оце
+                )
+
+length(views)
+```
+
+Зробимо з отриманих даних таблицю — data frame
+```{r}
+df <- data.frame(link=links, title=titles, views=views)
+head(df)
+```
+
+З адреси витягнемо рубрику, в якій опублікували матеріал
+```{r}
+df$rubric <- df$link %>%
+  str_extract("/[a-z\\-]+/") %>%   # літери від a до z та дефіси, що розташовані між слешами ("/")
+  str_replace_all("/", "") %>%
+  factor()   # тип змінної — категорійна
+```
+
+```{r}
+most_viewed <- df %>% filter(views == max(views))
+most_viewed$title
+
+df %>% arrange(-views)
+```
+
+```{r}
+rubric_order <- df %>%
+  group_by(rubric) %>%
+  summarise(n = sum(views)) %>%
+  arrange(n) %>%
+  select(rubric)
+rubric_order
+
+df$rubric <- factor(df$rubric, levels = rubric_order$rubric)
+```
+
+
+```{r}
+ggplot(df, aes(views, rubric)) +
+  geom_point(shape=21, size=2, color="#081d58", fill="#c7e9b4", stroke=0.6, alpha=0.8) +
+  geom_text(data=most_viewed, aes(label=most_viewed$title), nudge_y=-1.1, nudge_x = 20, size=3, hjust=1) +
+  theme_minimal()
+```
+
+
+```{r}
+ggsave("ob_news_rubric.svg")
+
+# install.packages("svglite")   # якщо вибиває помилку
+```
+
