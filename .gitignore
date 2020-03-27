@@ -2,8 +2,7 @@
 .~lock*
 .Rproj.user
 *.Rproj
-*.csv
-*.html
+*.nb.html
 .Rhistory
 video/
 .RData
