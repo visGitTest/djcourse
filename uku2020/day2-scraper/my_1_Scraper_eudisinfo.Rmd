@@ -1,0 +1,67 @@
+---
+title: "1, scraper"
+output: html_document
+---
+# Підготовка до роботи
+Сам R має вбудовані функції: зробити таблицю з даними `data.frame`, виконати арифметичні операції, підрахувати базові статистики, фільтрувати…  Проте багато завдань потребують додаткових функцій. Їх і дають бібліотеки. Ми встанивимо:
+- rvest для роботи з html  
+- tidyverse — набір пакетів для роботи з даними від Хедлі Вікхема. Tidy має набагато приємніший інтерфейс, ніж базовий R, а також купу допоміжних функцій  
+
+
+## Markdown
+Робочі ноутбуки мають розширення ".Rmd" — це маркдаун в R. Він дозволяє комбінувати текст, код, результат виконання коду в одному файлі. Ноутбуки можна перетворити в інші формати, наприклад, у веб-сторінку або pdf. Більше тут: https://rmarkdown.rstudio.com/lesson-2.html,  https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+install.packages('rvest')    # install 'rvest' library in R; library and package are synonyms
+install.packages('tidyverse')
+install.packages("progress")
+```
+
+У робочому середовищі або скрипті треба імпортувати необхідні бібліотеки:
+```{r setup, include=FALSE}
+library(rvest)    # a library for web web scraping
+library(tidyverse)
+library(progress)
+```
+
+# Скрейпинг
+## Cheatsheets
+
+About HTML: https://www.w3schools.com/html/default.asp
+CSS-selectors: https://www.w3schools.com/cssref/css_selectors.asp
+
+### Tidyverse code: piping
+
+`data %>% function1() %>% function2()` - is a **pipe**  
+`data` — is our data structure, most often a *DataFrame*  
+`function1`, `function1` — are functions, applied to data. The order of them matters!  
+
+1. `data %>% function1()` - `data` is transformed by `function1`.  
+2. `data %>% function1() %>% function2()` — data, transformed by `function1`, e.g. the result of `function1`, goes to `function2`.  
+
+The same can be written as:
+`data_after_f1 <- function1(data)`  
+`data_after_f2 <- function1(data_after_f1)` — much less elegant and clear code, but does the same.  
+
+**You can stack as much functions in pipe as you want!**  
+
+## Let's code!
+Заскрейпимо сайт euvsdisinfo.eu, щоб проаналізувати, яка там дезінформація
+
+0. Отримаємо html
+```{r}
+url <- "https://euvsdisinfo.eu/disinformation-cases/"
+content <- read_html(url)
+content
+```
+
+1. Знайдемо потрібні елементи на сторінці
+![find element](1_find-element.png)
+
+```{r}
+dates <- content %>%
+  html_nodes("[data-column='Date']") %>%
+  html_text() %>%
+  str_trim()
+```
+
